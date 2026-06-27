@@ -1,0 +1,224 @@
+---
+title: "Gapminder 데이터 대시보드"
+author: "박윤채"
+date: "2026-06-27"
+format:
+  dashboard:
+    theme: cosmo
+    nav-buttons:
+      - icon: github
+        href: https://github.com/plotly/datasets
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(knitr)
+
+theme_set(theme_minimal(base_size = 12))
+
+in_path <- if (file.exists(file.path("data", "gapminder_clean.csv")))
+             file.path("data", "gapminder_clean.csv") else file.path("data", "gapminder.csv")
+gap <- read.csv(in_path, stringsAsFactors = FALSE)
+gap$continent <- factor(gap$continent)
+gap$pop <- as.numeric(gap$pop)
+
+earliest <- min(gap$year); latest <- max(gap$year)
+n_country <- length(unique(gap$country))
+
+geomean <- function(x) exp(mean(log(x[x > 0])))
+cv <- function(x) sd(x) / mean(x)
+
+# 대륙별 단순 vs 인구가중 (최신연도)
+cont <- gap %>% filter(year == latest) %>%
+  group_by(continent) %>%
+  summarise(n = n(),
+            le_simple = mean(lifeExp),
+            le_weighted = weighted.mean(lifeExp, pop),
+            le_cv = cv(lifeExp), .groups = "drop") %>%
+  arrange(desc(le_weighted))
+
+# 기대수명 하락/반전 국가
+traj <- gap %>% arrange(country, year) %>% group_by(country) %>%
+  mutate(step = lifeExp - lag(lifeExp)) %>%
+  summarise(continent = first(continent),
+            net = lifeExp[year == latest] - lifeExp[year == earliest],
+            worst_step = min(step, na.rm = TRUE),
+            n_drops = sum(step < 0, na.rm = TRUE), .groups = "drop")
+net_decline <- traj %>% filter(net < 0) %>% arrange(net)
+
+# 상관
+r_log <- cor(gap$lifeExp, log(gap$gdpPercap))
+by_year <- gap %>% group_by(year) %>%
+  summarise(r = cor(lifeExp, log(gdpPercap)), .groups = "drop")
+
+# 분산 추이
+disp <- gap %>% group_by(year) %>%
+  summarise(le_sd = sd(lifeExp), gdp_cv = cv(gdpPercap), .groups = "drop")
+```
+
+# 개요 {orientation="rows"}
+
+## Row {height="20%"}
+
+```{r}
+#| content: valuebox
+#| title: "대상 국가 수"
+list(icon = "globe-americas", color = "primary", value = n_country)
+```
+
+```{r}
+#| content: valuebox
+#| title: "분석 기간"
+list(icon = "calendar-range", color = "info",
+     value = paste0(earliest, "~", latest))
+```
+
+```{r}
+#| content: valuebox
+#| title: "소득-수명 상관 (log GDP)"
+list(icon = "graph-up-arrow", color = "success",
+     value = sprintf("%.3f", r_log))
+```
+
+```{r}
+#| content: valuebox
+#| title: "기대수명 순(net) 하락 국가"
+list(icon = "exclamation-triangle", color = "danger",
+     value = nrow(net_decline))
+```
+
+## Row {height="40%"}
+
+```{r}
+#| title: "대륙별 평균 기대수명 추이"
+trend <- gap %>% group_by(continent, year) %>%
+  summarise(lifeExp = mean(lifeExp), .groups = "drop")
+ggplot(trend, aes(year, lifeExp, colour = continent)) +
+  geom_line(linewidth = 1) + geom_point(size = 1.4) +
+  labs(x = "연도", y = "평균 기대수명", colour = "대륙")
+```
+
+```{r}
+#| title: "대륙별 총인구 추이 (10억 명)"
+poptrend <- gap %>% group_by(continent, year) %>%
+  summarise(pop = sum(pop) / 1e9, .groups = "drop")
+ggplot(poptrend, aes(year, pop, fill = continent)) +
+  geom_area(alpha = 0.85) +
+  labs(x = "연도", y = "인구 (10억 명)", fill = "대륙")
+```
+
+## Row {height="40%"}
+
+```{r}
+#| title: "기대수명 분포 (전체 연도)"
+ggplot(gap, aes(lifeExp)) +
+  geom_histogram(bins = 30, fill = "#2c7fb8", colour = "white") +
+  labs(x = "기대수명", y = "빈도")
+```
+
+```{r}
+#| title: "대륙별 기대수명 분포 (최신연도)"
+ggplot(filter(gap, year == latest),
+       aes(reorder(continent, lifeExp, median), lifeExp, fill = continent)) +
+  geom_boxplot(show.legend = FALSE, outlier.colour = "red") +
+  labs(x = "대륙", y = "기대수명")
+```
+
+# 소득과 수명 {orientation="columns"}
+
+## Column {width="60%"}
+
+```{r}
+#| title: "Preston 곡선: 1인당 GDP vs 기대수명 (최신연도)"
+ggplot(filter(gap, year == latest), aes(gdpPercap, lifeExp)) +
+  geom_point(aes(size = pop, colour = continent), alpha = 0.7) +
+  geom_smooth(method = "loess", se = TRUE, colour = "black", linewidth = 0.8) +
+  scale_x_log10() + scale_size(range = c(1, 14), guide = "none") +
+  labs(x = "1인당 GDP (로그 스케일)", y = "기대수명", colour = "대륙")
+```
+
+## Column {width="40%"}
+
+```{r}
+#| title: "상관관계 요약"
+data.frame(
+  지표 = c("Pearson (원시)", "Spearman (순위)", "Pearson (log GDP)"),
+  상관계수 = c(
+    sprintf("%.3f", cor(gap$lifeExp, gap$gdpPercap)),
+    sprintf("%.3f", cor(gap$lifeExp, gap$gdpPercap, method = "spearman")),
+    sprintf("%.3f", r_log))
+) |> kable()
+```
+
+```{r}
+#| title: "연도별 상관 안정성 (Simpson 점검)"
+ggplot(by_year, aes(year, r)) +
+  geom_line(linewidth = 1, colour = "#d95f0e") +
+  geom_point(size = 2, colour = "#d95f0e") +
+  ylim(0.6, 0.95) +
+  labs(x = "연도", y = "lifeExp ~ log(GDP) 상관")
+```
+
+::: {.card title="해석"}
+원시 Pearson(0.584)은 비선형성 탓에 관계를 과소평가합니다.
+Spearman(0.826)·로그 변환(0.808)으로 보면 소득–수명 관계는 강하며,
+연도별로 분리해도 0.75~0.87로 **안정적**입니다(풀링 상관의 허상 아님).
+:::
+
+# 평균의 착시 {orientation="rows"}
+
+## Row {height="50%"}
+
+```{r}
+#| title: "대륙 기대수명: 단순평균 vs 인구가중평균"
+cont %>%
+  pivot_longer(c(le_simple, le_weighted), names_to = "type", values_to = "le") %>%
+  mutate(type = recode(type, le_simple = "단순평균", le_weighted = "인구가중평균")) %>%
+  ggplot(aes(reorder(continent, le), le, fill = type)) +
+  geom_col(position = "dodge") + coord_flip() +
+  labs(x = NULL, y = "기대수명", fill = NULL)
+```
+
+```{r}
+#| title: "기대수명이 하락한 국가 (1952 > 2007)"
+gap %>% filter(country %in% net_decline$country) %>%
+  ggplot(aes(year, lifeExp, colour = country)) +
+  geom_line(linewidth = 1) + geom_point(size = 1.3) +
+  labs(x = "연도", y = "기대수명", colour = "국가")
+```
+
+## Row {height="50%"}
+
+```{r}
+#| title: "단일 5년 구간 최대 하락 TOP5"
+traj %>% arrange(worst_step) %>% head(5) %>%
+  transmute(국가 = country, 대륙 = continent,
+            `최대 하락(년)` = round(worst_step, 1)) %>%
+  kable()
+```
+
+```{r}
+#| title: "세계는 수렴하는가? — 분산 추이"
+disp %>%
+  select(year, `기대수명 SD` = le_sd, `GDP 변동계수` = gdp_cv) %>%
+  pivot_longer(-year, names_to = "metric", values_to = "v") %>%
+  ggplot(aes(year, v, colour = metric)) +
+  geom_line(linewidth = 1) + geom_point() +
+  facet_wrap(~metric, scales = "free_y") +
+  labs(x = "연도", y = NULL) +
+  theme(legend.position = "none")
+```
+
+::: {.card title="핵심 메시지"}
+"모든 대륙이 상승"은 평균의 착시입니다. 짐바브웨·스와질란드는 1952년보다
+기대수명이 **하락**했고, 르완다는 단일 구간 -20.4년 급락(1994 학살)을 겪었습니다.
+대륙 평균도 인구가중 시 아시아가 -1.3년으로 달라지며, 기대수명 분산(SD)은
+정체(12.2→12.1)되어 "수렴"으로 단정할 수 없습니다.
+:::
