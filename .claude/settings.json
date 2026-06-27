@@ -3,7 +3,11 @@
     "allow": [
       "PowerShell(New-Item -ItemType Directory -Force -Path .\\\\document)",
       "PowerShell(\"document ���� �غ� �Ϸ�\")",
-      "PowerShell(if \\(Test-Path .\\\\.git\\) { \"git repo 있음\"; git status --short } else { \"git repo 아님 \\(git init 필요\\)\" }; Get-ChildItem -Recurse -File -Name | Where-Object { $_ -notmatch '^\\\\.git' })"
+      "PowerShell(if \\(Test-Path .\\\\.git\\) { \"git repo 있음\"; git status --short } else { \"git repo 아님 \\(git init 필요\\)\" }; Get-ChildItem -Recurse -File -Name | Where-Object { $_ -notmatch '^\\\\.git' })",
+      "PowerShell(& \"C:\\\\Program Files\\\\R\\\\R-4.6.0\\\\bin\\\\Rscript.exe\" -e \"pkgs <- c\\('ggplot2','dplyr','tidyr','readr'\\); for \\(p in pkgs\\) cat\\(p, ':', requireNamespace\\(p, quietly=TRUE\\), '\\\\n'\\)\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\R\\\\R-4.6.0\\\\bin\\\\Rscript.exe\" eda.R)",
+      "PowerShell(Get-ChildItem .\\\\figures | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}})",
+      "PowerShell(\"user.name  : \" + \\(git config user.name\\); \"user.email : \" + \\(git config user.email\\))"
     ]
   }
 }
