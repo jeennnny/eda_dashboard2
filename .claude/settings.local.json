@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(if \\(Get-Command Rscript -ErrorAction SilentlyContinue\\) { \\(Get-Command Rscript\\).Source; Rscript --version } else { \"Rscript not found on PATH\" })",
+      "PowerShell(& \"C:\\\\Program Files\\\\R\\\\R-4.6.0\\\\bin\\\\Rscript.exe\" clean.R)"
+    ]
+  }
+}

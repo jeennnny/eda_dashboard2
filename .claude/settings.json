@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force -Path .\\\\document)",
+      "PowerShell(\"document ���� �غ� �Ϸ�\")",
+      "PowerShell(if \\(Test-Path .\\\\.git\\) { \"git repo 있음\"; git status --short } else { \"git repo 아님 \\(git init 필요\\)\" }; Get-ChildItem -Recurse -File -Name | Where-Object { $_ -notmatch '^\\\\.git' })"
+    ]
+  }
+}
